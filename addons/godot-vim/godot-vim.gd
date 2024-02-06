@@ -520,6 +520,7 @@ class Command:
             s.append(c.to_lower() if c == c.to_upper() else c.to_upper())
         ed.replace_selection(''.join(s))
 
+
     ###  ACTIONS
 
     static func paste(args: Dictionary, ed: EditorAdaptor, vim: Vim) -> void:
