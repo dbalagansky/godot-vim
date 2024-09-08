@@ -1,18 +1,27 @@
-VIM bindings for Godot 4
+# VIM emulator for Godot 4 (version 4.3.0)
 
-recently improved thanks to wenqiangwang
-If you would like ctrl+F to be move-forward by page then uncomment the following line
+## What is this?
+This is a Godot 4 plugin to emulates VIM-like editor behavior witin Godot editor itself (i.e. after installed and enabled, one could edit (kind of) like in VIM.
 
-#"Ctrl+F": 1, ## Uncomment if you want Ctrl+F for move forward by page
+## How to install?
+1. Clone or download the source of the repo, and copy the `addons` folder to the root of your project.
+2. Go to `Project` -> `Project Settings` -> `Plugins` tab and check the check box of the plugin named `godot-vim`
 
-### Supported Mode
+## What's new?
+- Changed version schema to godot_major_version.godot_minir_version.vim_plugin_version, so that it is easier to find the correct version of plugin for specific version of Godot editors
+- Created a new branch `4.2` for Godot Editors 4.0 to 4.2
+- Fixed selection issues due to CodeEdit.select() behavior change
+
+
+## VIM features supprted
+#### Mode
 
     - Normal mode
     - Insert mode
     - Visual mode
     - Visual line mode
 
-### Supported motions
+#### Motions
 
     h, l, j, k, +, -
     ^, 0, $, |
@@ -25,14 +34,14 @@ If you would like ctrl+F to be move-forward by page then uncomment the following
     aw, a(, a{, a[, a", a'
     iw, i(, i{, i[, i", i'
 
-### Supported operator
+#### Operator
 
     c, C,
     d, D, x, X,
     y, Y,
     u, U, ~
 
-### Supported actions
+#### Actions
 
     p,
     u, c-r,
@@ -42,14 +51,20 @@ If you would like ctrl+F to be move-forward by page then uncomment the following
     >, <
     m, '
 
-### Override Default Godot Shortcuts with `godot-vim`'s ones
+## FAQ
+1. How to override default Godot shortcuts with `godot-vim`'s ones
 
-Note that all non-ascii character mappings that are already mapped in the default Godot editor have to be unmapped from the Editor settings (Editor >> Editor Settings >> Shorcuts) before being usable with `godot-vim`.
+    Note that all non-ascii character mappings that are already mapped in the default Godot editor have to be unmapped from the Editor settings (Editor >> Editor Settings >> Shorcuts) before being usable with `godot-vim`.
+    
+    This currently goes for:
+    
+    - `Ctrl+R`
+    - `Ctrl+U`
+    - `Ctrl+D`
+    
+    See the full list of non-ascii shortucts that may already be mapped by Godot and thus wouldn't work in `godot-vim` before releasing them in Godot settings: https://github.com/joshnajera/godot-vim/blob/main/addons/godot-vim/godot-vim.gd#L135
 
-This currently goes for:
+2. I found a problem, what should I do?
 
-- `Ctrl+R`
-- `Ctrl+U`
-- `Ctrl+D`
-
-See the full list of non-ascii shortucts that may already be mapped by Godot and thus wouldn't work in `godot-vim` before releasing them in Godot settings: https://github.com/joshnajera/godot-vim/blob/main/addons/godot-vim/godot-vim.gd#L135
+   - You could debug by yourself, changing the value of `DEBUGGING` variable to 1 to see logs
+   - Or report the issue by providing a) the content of original text editing, b) the cursor position and c) key sequence that repros the issue
