@@ -94,8 +94,11 @@ var the_key_map : Array[Dictionary] = [
     { "keys": ["C"],                            "type": OPERATOR, "operator": "change" },
     { "keys": ["Shift+C"],                      "type": OPERATOR_MOTION, "operator": "change", "motion": "move_to_end_of_line", "motion_args": { "inclusive": true } },
     { "keys": ["X"],                            "type": OPERATOR_MOTION, "operator": "delete", "motion": "move_by_characters", "motion_args": { "forward": true, "one_line": true }, "context": Context.NORMAL },
+    { "keys": ["S"],                            "type": OPERATOR_MOTION, "operator": "change", "motion": "move_by_characters", "motion_args": { "forward": true }, "context": Context.NORMAL },
     { "keys": ["X"],                            "type": OPERATOR, "operator": "delete", "context": Context.VISUAL },
     { "keys": ["Shift+X"],                      "type": OPERATOR_MOTION, "operator": "delete", "motion": "move_by_characters", "motion_args": { "forward": false } },
+    { "keys": ["G", "U"],                            "type": OPERATOR, "operator": "change_case", "operator_args": { "lower": true }, "context": Context.VISUAL },
+    { "keys": ["G", "Shift+U"],                      "type": OPERATOR, "operator": "change_case", "operator_args": { "lower": false }, "context": Context.VISUAL },
     { "keys": ["U"],                            "type": OPERATOR, "operator": "change_case", "operator_args": { "lower": true }, "context": Context.VISUAL },
     { "keys": ["Shift+U"],                      "type": OPERATOR, "operator": "change_case", "operator_args": { "lower": false }, "context": Context.VISUAL },
     { "keys": ["Shift+QuoteLeft"],              "type": OPERATOR, "operator": "toggle_case", "operator_args": {}, "context": Context.VISUAL },
@@ -172,7 +175,7 @@ func _input(event) -> void:
     var key = event as InputEventKey
 
     # Don't process when not a key action
-    if key == null or !key.is_pressed() or not the_ed.has_focus():
+    if key == null or !key.is_pressed() or not the_ed or not the_ed.has_focus():
         return
 
     if key.get_keycode_with_modifiers() == KEY_NONE and key.unicode == CODE_MACRO_PLAY_END:
@@ -1405,7 +1408,7 @@ class EditorAdaptor:
         return Position.new(result.y, result.x)
 
     func has_focus() -> bool:
-        return code_editor.has_focus()
+        return weakref(code_editor).get_ref() and code_editor.has_focus()
 
 
 class CommandDispatcher:
