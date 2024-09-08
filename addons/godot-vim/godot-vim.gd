@@ -3,7 +3,7 @@ extends EditorPlugin
 
 
 const INF_COL : int = 99999
-const DEBUGGING : int = 1 # Change to 1 for debugging
+const DEBUGGING : int = 1# Change to 1 for debugging
 const CODE_MACRO_PLAY_END : int = 10000
 
 const BREAKERS : Dictionary = { '!': 1, '"': 1, '#': 1, '$': 1, '%': 1, '&': 1, '(': 1, ')': 1, '*': 1, '+': 1, ',': 1, '-': 1, '.': 1, '/': 1, ':': 1, ';': 1, '<': 1, '=': 1, '>': 1, '?': 1, '@': 1, '[': 1, '\\': 1, ']': 1, '^': 1, '`': 1, '\'': 1, '{': 1, '|': 1, '}': 1, '~': 1 }
@@ -87,7 +87,7 @@ var the_key_map : Array[Dictionary] = [
     { "keys": ["I", "Apostrophe"],              "type": MOTION, "motion": "text_object", "motion_args": { "inner": true, "object":"'" } },
     { "keys": ["I", 'Shift+Apostrophe'],        "type": MOTION, "motion": "text_object", "motion_args": { "inner": true, "object":'"' } },
     { "keys": ["I", "W"],                       "type": MOTION, "motion": "text_object", "motion_args": { "inner": true, "object":"w" } },
-    { "keys": ["D"],                            "type": OPERATOR, "operator": "delete", "operator_args": { "line_wise_to_next_line": true } },
+    { "keys": ["D"],                            "type": OPERATOR, "operator": "delete" },
     { "keys": ["Shift+D"],                      "type": OPERATOR_MOTION, "operator": "delete", "motion": "move_to_end_of_line", "motion_args": { "inclusive": true } },
     { "keys": ["Y"],                            "type": OPERATOR, "operator": "yank", "operator_args": { "maintain_position": true } },
     { "keys": ["Shift+Y"],                      "type": OPERATOR_MOTION, "operator": "yank", "motion": "move_to_end_of_line", "motion_args": { "inclusive": true }, "operator_args": { "maintain_position": true } },
@@ -433,11 +433,7 @@ class Command:
         return move_to_next_char(cur, args, ed, vim)
 
     static func expand_to_line(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
-        var to_next_line = args.get("to_next_line", false)
-        if to_next_line:
-            return Position.new(cur.line + args.repeat, -1)
-        else:
-            return Position.new(cur.line + args.repeat - 1, INF_COL)
+        return Position.new(cur.line + args.repeat - 1, INF_COL)
 
     static func find_word_under_caret(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
         var forward : bool = args.forward
@@ -499,10 +495,13 @@ class Command:
         var text := ed.selected_text()
         var line_wise = args.get("line_wise", false)
         vim.register.set_text(text, line_wise)
-        
 
-            
         ed.delete_selection()
+        
+        # For linewise delete, we want to delete one more line
+        if line_wise:
+            ed.select(ed.curr_line(), -1, ed.curr_line()+1, -1)
+            ed.delete_selection()
 
         var line := ed.curr_line()
         var col := ed.curr_column()
@@ -575,7 +574,7 @@ class Command:
         var to_replace = args.selected_character
         var line := ed.curr_line()
         var col := ed.curr_column()
-        ed.select(line, col, line, col+1)
+        ed.select(line, col, line, col)
         ed.replace_selection(to_replace)
 
     static func enter_insert_mode(args: Dictionary, ed: EditorAdaptor, vim: Vim) -> void:
@@ -1577,7 +1576,7 @@ class CommandDispatcher:
                     if jump_forward:
                         ed.select(start.line, 0, new_pos.line, INF_COL)
                     else:
-                        ed.select(start.line, INF_COL, new_pos.line, 0)
+                        ed.select(start.line, INF_COL, new_pos.line, -1)
                 else:
                     ed.select_by_pos2(start, new_pos)
             else:  # Normal mode
@@ -1614,9 +1613,7 @@ class CommandDispatcher:
             # Line wise operation
             if input_state.operator == command.operator: 
                 operator_args.line_wise = true
-                # For operator like 'd', we need to expand selection to the beginning of the next line
-                var expand_to_next_line : bool = operator_args.get('line_wise_to_next_line', false)
-                var new_pos : Position = process_motion("expand_to_line", { "to_next_line": expand_to_next_line }, ed, vim)
+                var new_pos : Position = process_motion("expand_to_line", {}, ed, vim)
                 ed.select(start.line, 0, new_pos.line, new_pos.column)
                 process_operator(command.operator, operator_args, ed, vim)
 
