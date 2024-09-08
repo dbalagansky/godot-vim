@@ -3,7 +3,7 @@ extends EditorPlugin
 
 
 const INF_COL : int = 99999
-const DEBUGGING : int = 0 # Change to 1 for debugging
+const DEBUGGING : int = 1 # Change to 1 for debugging
 const CODE_MACRO_PLAY_END : int = 10000
 
 const BREAKERS : Dictionary = { '!': 1, '"': 1, '#': 1, '$': 1, '%': 1, '&': 1, '(': 1, ')': 1, '*': 1, '+': 1, ',': 1, '-': 1, '.': 1, '/': 1, ':': 1, ';': 1, '<': 1, '=': 1, '>': 1, '?': 1, '@': 1, '[': 1, '\\': 1, ']': 1, '^': 1, '`': 1, '\'': 1, '{': 1, '|': 1, '}': 1, '~': 1 }
@@ -87,10 +87,10 @@ var the_key_map : Array[Dictionary] = [
     { "keys": ["I", "Apostrophe"],              "type": MOTION, "motion": "text_object", "motion_args": { "inner": true, "object":"'" } },
     { "keys": ["I", 'Shift+Apostrophe'],        "type": MOTION, "motion": "text_object", "motion_args": { "inner": true, "object":'"' } },
     { "keys": ["I", "W"],                       "type": MOTION, "motion": "text_object", "motion_args": { "inner": true, "object":"w" } },
-    { "keys": ["D"],                            "type": OPERATOR, "operator": "delete" },
+    { "keys": ["D"],                            "type": OPERATOR, "operator": "delete", "operator_args": { "line_wise_to_next_line": true } },
     { "keys": ["Shift+D"],                      "type": OPERATOR_MOTION, "operator": "delete", "motion": "move_to_end_of_line", "motion_args": { "inclusive": true } },
-    { "keys": ["Y"],                            "type": OPERATOR, "operator": "yank" },
-    { "keys": ["Shift+Y"],                      "type": OPERATOR_MOTION, "operator": "yank", "motion": "move_to_end_of_line", "motion_args": { "inclusive": true } },
+    { "keys": ["Y"],                            "type": OPERATOR, "operator": "yank", "operator_args": { "maintain_position": true } },
+    { "keys": ["Shift+Y"],                      "type": OPERATOR_MOTION, "operator": "yank", "motion": "move_to_end_of_line", "motion_args": { "inclusive": true }, "operator_args": { "maintain_position": true } },
     { "keys": ["C"],                            "type": OPERATOR, "operator": "change" },
     { "keys": ["Shift+C"],                      "type": OPERATOR_MOTION, "operator": "change", "motion": "move_to_end_of_line", "motion_args": { "inclusive": true } },
     { "keys": ["X"],                            "type": OPERATOR_MOTION, "operator": "delete", "motion": "move_by_characters", "motion_args": { "forward": true, "one_line": true }, "context": Context.NORMAL },
@@ -156,7 +156,6 @@ var the_dispatcher := CommandDispatcher.new(the_key_map) # The command dispatche
 
 func _enter_tree() -> void:
     editor_interface = get_editor_interface()
-
     var script_editor = editor_interface.get_script_editor()
     script_editor.editor_script_changed.connect(on_script_changed)
     script_editor.script_close.connect(on_script_closed)
@@ -200,6 +199,7 @@ func on_script_changed(s: Script) -> void:
     the_vim.set_current_session(s, the_ed)
 
     var script_editor = editor_interface.get_script_editor()
+    
     var scrpit_editor_base := script_editor.get_current_editor()
     if scrpit_editor_base:
         var code_editor := scrpit_editor_base.get_base_editor() as CodeEdit
@@ -265,6 +265,7 @@ class Command:
             else:
                 line -= 1
                 col = ed.last_column(line)
+
         return Position.new(line, col)
 
     static func move_by_scroll(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
@@ -291,8 +292,11 @@ class Command:
                 vim.current.last_h_pos = col
 
         var line = ed.next_unfolded_line(cur.line, args.repeat, args.forward)
+
         if args.get("to_first_char", false):
             col = ed.find_first_non_white_space_character(line)
+        else:
+            col = min(col, ed.last_column(line))
 
         return Position.new(line, col)
 
@@ -388,7 +392,7 @@ class Command:
         for from in [Position.new(symbol.line, 0), Position.new(0, 0)]:
             var parser = GDScriptParser.new(ed, from)
             if not parser.parse_until(symbol):
-               continue
+                continue
 
             if symbol.char in ")]}":
                 parser.stack.reverse()
@@ -429,7 +433,11 @@ class Command:
         return move_to_next_char(cur, args, ed, vim)
 
     static func expand_to_line(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
-        return Position.new(cur.line + args.repeat - 1, INF_COL)
+        var to_next_line = args.get("to_next_line", false)
+        if to_next_line:
+            return Position.new(cur.line + args.repeat, -1)
+        else:
+            return Position.new(cur.line + args.repeat - 1, INF_COL)
 
     static func find_word_under_caret(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
         var forward : bool = args.forward
@@ -489,8 +497,13 @@ class Command:
 
     static func delete(args: Dictionary, ed: EditorAdaptor, vim: Vim) -> void:
         var text := ed.selected_text()
-        vim.register.set_text(text, args.get("line_wise", false))
+        var line_wise = args.get("line_wise", false)
+        vim.register.set_text(text, line_wise)
+        
+
+            
         ed.delete_selection()
+
         var line := ed.curr_line()
         var col := ed.curr_column()
         if col > ed.last_column(line): # If after deletion we are beyond the end, move left
@@ -537,13 +550,14 @@ class Command:
 
         if line_wise:
             if after:
-                text = "\n" + text.substr(0, len(text)-1)
+                text = "\n" + text
                 col = len(ed.line_text(line))
             else:
+                text = text + "\n"
                 col = 0
         else:
             col += 1 if after else 0
-
+        
         ed.set_curr_column(col)
         ed.insert_text(text)
 
@@ -1025,10 +1039,11 @@ class VimSession:
         ed.set_block_caret(true)
 
         visual_start_pos = ed.curr_position()
+
         if line_wise:
-            ed.select(visual_start_pos.line, 0, visual_start_pos.line + 1, 0)
+            ed.select(visual_start_pos.line, 0, visual_start_pos.line, INF_COL)
         else:
-            ed.select_by_pos2(visual_start_pos, visual_start_pos.right())
+            ed.select_by_pos2(visual_start_pos, visual_start_pos)
 
 
 class Macro:
@@ -1221,6 +1236,7 @@ class EditorAdaptor:
         var step : int = 1 if forward else -1
         if line + step > last_line() or line + step  < first_line():
             return line
+
         var count := code_editor.get_next_visible_line_offset_from(line + step, offset * step)
         return line + count * (1 if forward else -1)
 
@@ -1263,16 +1279,29 @@ class EditorAdaptor:
     func deselect() -> void:
         code_editor.deselect()
 
-    func select_range(r: TextRange) -> void:
-        select(r.from.line, r.from.column, r.to.line, r.to.column)
-
     func select_by_pos2(from: Position, to: Position) -> void:
         select(from.line, from.column, to.line, to.column)
 
     func select(from_line: int, from_col: int, to_line: int, to_col: int) -> void:
-        if to_line > last_line(): # If we try to select pass the last line, select till the last char
+        # If we try to select backward pass the first line, select the first char
+        if to_line < 0: 
+            to_line = 0
+            to_col = 0
+        # If we try to select pass the last line, select till the last char
+        elif to_line > last_line():
             to_line = last_line()
             to_col = INF_COL
+
+        # Our select() is inclusive, e.g. ed.select(0, 0, 0, 0) selects the first character;
+        # while CodeEdit's select() is exlusvie on the right hand side, e.g. code_editor.select(0, 0, 0, 1) selects the first character.
+        # We do the translation here:
+        if from_line < to_line or (from_line == to_line and from_col <= to_col):  # Selecting forward
+            to_col += 1
+        else:
+            from_col += 1
+
+        if DEBUGGING:
+            print("  Selecting from (%d,%d) to (%d,%d)" % [from_line, from_col, to_line, to_col])
 
         code_editor.select(from_line, from_col, to_line, to_col)
 
@@ -1446,7 +1475,7 @@ class CommandDispatcher:
             var context = Context.VISUAL if vim.current.visual_mode else Context.NORMAL
             var result = match_commands(context, vim.current.input_state, ed, vim)
             if not result.full.is_empty():
-                var command = result.full[0]
+                var command = result.full[0].duplicate(true)
                 var change_num := vim.current.text_change_number
                 if process_command(command, ed, vim):
                     input_state.clear()
@@ -1503,7 +1532,9 @@ class CommandDispatcher:
     func process_command(command: Dictionary, ed: EditorAdaptor, vim: Vim) -> bool:
         var vim_session := vim.current
         var input_state := vim_session.input_state
-        var start := Position.new(ed.curr_line(), ed.curr_column())
+        
+        # We respecte selection start position if we are in visual mod
+        var start := vim_session.visual_start_pos if vim_session.visual_mode else Position.new(ed.curr_line(), ed.curr_column())
 
         # If there is an operator pending, then we do need a motion or operator (for linewise operation)
         if not input_state.operator.is_empty() and (command.type != MOTION and command.type != OPERATOR):
@@ -1520,61 +1551,76 @@ class CommandDispatcher:
 
             if command.type == OPERATOR_MOTION:
                 var operator_args = command.get("operator_args", {})
+                operator_args.original_pos = start
+
                 input_state.operator = command.operator
                 input_state.operator_args = operator_args
 
             if command.keys[-1] == "{char}":
                 motion_args.selected_character = char(input_state.buffer.back().unicode)
-
+                
+            # Handle the motion and get the new cursor position 
             var new_pos = process_motion(command.motion, motion_args, ed, vim)
             if new_pos == null:
                 return true
+                
+            # In some cases (text object), we need to override the start position
+            if new_pos is TextRange:
+                start = new_pos.from 
+                new_pos = new_pos.to                   
 
+            var inclusive : bool = motion_args.get("inclusive", false)
+            var jump_forward := start.compares_to(new_pos) < 0
+            
             if vim_session.visual_mode:  # Visual mode
-                start = vim_session.visual_start_pos
-                if new_pos is TextRange:
-                    start = new_pos.from # In some cases (text object), we need to override the start position
-                    new_pos = new_pos.to
-                ed.jump_to(new_pos.line, new_pos.column)
-                if start.compares_to(new_pos) > 0: # swap
-                    start = new_pos
-                    new_pos = vim_session.visual_start_pos
                 if vim_session.visual_line:
-                    ed.select(start.line, 0, new_pos.line + 1, 0)
+                    if jump_forward:
+                        ed.select(start.line, 0, new_pos.line, INF_COL)
+                    else:
+                        ed.select(start.line, INF_COL, new_pos.line, 0)
                 else:
-                    ed.select_by_pos2(start, new_pos.right())
-            elif input_state.operator.is_empty():  # Normal mode motion only
-                ed.jump_to(new_pos.line, new_pos.column)
-            else:  # Normal mode operator motion
-                if new_pos is TextRange:
-                    start = new_pos.from # In some cases (text object), we need to override the start position
-                    new_pos = new_pos.to
-                var inclusive : bool = motion_args.get("inclusive", false)
-                ed.select_by_pos2(start, new_pos.right() if inclusive else new_pos)
-                process_operator(input_state.operator, input_state.operator_args, ed, vim)
+                    ed.select_by_pos2(start, new_pos)
+            else:  # Normal mode
+                if input_state.operator.is_empty():  # Motion only
+                    ed.jump_to(new_pos.line, new_pos.column)
+                else:  # Operator motion
+                    # Check if we need to exlude the last character in selection
+                    if not inclusive:
+                        if jump_forward:
+                            new_pos = new_pos.left()
+                        else:
+                            start = start.left()
+
+                    ed.select_by_pos2(start, new_pos)
+                    process_operator(input_state.operator, input_state.operator_args, ed, vim)
             return true
         elif command.type == OPERATOR:
             var operator_args = command.get("operator_args", {})
+            operator_args.original_pos = start
+            
             if vim.current.visual_mode:
                 operator_args.line_wise = vim.current.visual_line
                 process_operator(command.operator, operator_args, ed, vim)
                 vim.current.enter_normal_mode()
                 return true
-            elif input_state.operator.is_empty(): # We are not fully done yet, need to wait for the motion
+                
+            # Otherwise, we are in normal mode
+            if input_state.operator.is_empty(): # We are not fully done yet, need to wait for the motion
                 input_state.operator = command.operator
                 input_state.operator_args = operator_args
                 input_state.buffer.clear()
                 return false
-            else:
-                if input_state.operator == command.operator: # Line wise operation
-                    operator_args.line_wise = true
-                    var new_pos : Position = process_motion("expand_to_line", {}, ed, vim)
-                    if new_pos.compares_to(start) > 0:
-                        ed.select(start.line, 0, new_pos.line + 1, 0)
-                    else:
-                        ed.select(new_pos.line, 0, start.line + 1, 0)
-                    process_operator(command.operator, operator_args, ed, vim)
-                return true
+
+            # Line wise operation
+            if input_state.operator == command.operator: 
+                operator_args.line_wise = true
+                # For operator like 'd', we need to expand selection to the beginning of the next line
+                var expand_to_next_line : bool = operator_args.get('line_wise_to_next_line', false)
+                var new_pos : Position = process_motion("expand_to_line", { "to_next_line": expand_to_next_line }, ed, vim)
+                ed.select(start.line, 0, new_pos.line, new_pos.column)
+                process_operator(command.operator, operator_args, ed, vim)
+
+            return true
         
         return false
 
@@ -1594,11 +1640,20 @@ class CommandDispatcher:
 
         # Perform operation
         Callable(Command, operator).call(operator_args, ed, vim)
-
+        
+        if operator_args.get("maintain_position", false):
+            var original_pos = operator_args.get("original_pos")
+            ed.jump_to(original_pos.line, original_pos.column)
 
     func process_motion(motion: String, motion_args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Variant:
         # Get current position
         var cur := Position.new(ed.curr_line(), ed.curr_column())
+        
+        # In Godot 4.3, CodeEdit.select moves cursor as well. If we select forward, the cursor will be positioned at the next column of the last selected column.
+        # But for VIM in the same case, the cursor position is exactly the last selected column. So we move back by one column when we considering the current position.
+        if vim.current.visual_mode:
+            if ed.code_editor.get_selection_origin_column() < ed.code_editor.get_caret_column():
+                cur.column -= 1
 
         # Prepare motion args
         var user_repeat = vim.current.input_state.get_repeat()
@@ -1626,4 +1681,3 @@ class CommandDispatcher:
             print("  Motion: %s %s to %s" % [motion, motion_args, result])
 
         return result
-
