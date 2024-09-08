@@ -62,7 +62,7 @@ This is a Godot 4 plugin to emulates VIM-like editor behavior witin Godot editor
     - `Ctrl+U`
     - `Ctrl+D`
     
-    See the full list of non-ascii shortucts that may already be mapped by Godot and thus wouldn't work in `godot-vim` before releasing them in Godot settings: https://github.com/joshnajera/godot-vim/blob/main/addons/godot-vim/godot-vim.gd#L135
+    See the full list of non-ascii shortucts that may already be mapped by Godot and thus wouldn't work in `godot-vim` before releasing them in Godot settings: https://github.com/wenqiangwang/godot-vim/blob/main/addons/godot-vim/godot-vim.gd#L138
 
 2. I found a problem, what should I do?
 
