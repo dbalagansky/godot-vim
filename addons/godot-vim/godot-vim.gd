@@ -3,8 +3,9 @@ extends EditorPlugin
 
 
 const INF_COL : int = 99999
-const DEBUGGING : int = 1# Change to 1 for debugging
+const DEBUGGING : int = 0 # Change to 1 for debugging
 const CODE_MACRO_PLAY_END : int = 10000
+
 
 const BREAKERS : Dictionary = { '!': 1, '"': 1, '#': 1, '$': 1, '%': 1, '&': 1, '(': 1, ')': 1, '*': 1, '+': 1, ',': 1, '-': 1, '.': 1, '/': 1, ':': 1, ';': 1, '<': 1, '=': 1, '>': 1, '?': 1, '@': 1, '[': 1, '\\': 1, ']': 1, '^': 1, '`': 1, '\'': 1, '{': 1, '|': 1, '}': 1, '~': 1 }
 const WHITESPACE: Dictionary = { ' ': 1, '	': 1, '\n' : 1 }
@@ -87,6 +88,7 @@ var the_key_map : Array[Dictionary] = [
     { "keys": ["I", "Apostrophe"],              "type": MOTION, "motion": "text_object", "motion_args": { "inner": true, "object":"'" } },
     { "keys": ["I", 'Shift+Apostrophe'],        "type": MOTION, "motion": "text_object", "motion_args": { "inner": true, "object":'"' } },
     { "keys": ["I", "W"],                       "type": MOTION, "motion": "text_object", "motion_args": { "inner": true, "object":"w" } },
+    { "keys": ["Apostrophe", "{char}"],         "type": MOTION, "motion": "go_to_bookmark", "motion_args": {} },
     { "keys": ["D"],                            "type": OPERATOR, "operator": "delete" },
     { "keys": ["Shift+D"],                      "type": OPERATOR_MOTION, "operator": "delete", "motion": "move_to_end_of_line", "motion_args": { "inclusive": true } },
     { "keys": ["Y"],                            "type": OPERATOR, "operator": "yank", "operator_args": { "maintain_position": true } },
@@ -97,8 +99,8 @@ var the_key_map : Array[Dictionary] = [
     { "keys": ["S"],                            "type": OPERATOR_MOTION, "operator": "change", "motion": "move_by_characters", "motion_args": { "forward": true }, "context": Context.NORMAL },
     { "keys": ["X"],                            "type": OPERATOR, "operator": "delete", "context": Context.VISUAL },
     { "keys": ["Shift+X"],                      "type": OPERATOR_MOTION, "operator": "delete", "motion": "move_by_characters", "motion_args": { "forward": false } },
-    { "keys": ["G", "U"],                            "type": OPERATOR, "operator": "change_case", "operator_args": { "lower": true }, "context": Context.VISUAL },
-    { "keys": ["G", "Shift+U"],                      "type": OPERATOR, "operator": "change_case", "operator_args": { "lower": false }, "context": Context.VISUAL },
+    { "keys": ["G", "U"],                       "type": OPERATOR, "operator": "change_case", "operator_args": { "lower": true }, "context": Context.VISUAL },
+    { "keys": ["G", "Shift+U"],                 "type": OPERATOR, "operator": "change_case", "operator_args": { "lower": false }, "context": Context.VISUAL },
     { "keys": ["U"],                            "type": OPERATOR, "operator": "change_case", "operator_args": { "lower": true }, "context": Context.VISUAL },
     { "keys": ["Shift+U"],                      "type": OPERATOR, "operator": "change_case", "operator_args": { "lower": false }, "context": Context.VISUAL },
     { "keys": ["Shift+QuoteLeft"],              "type": OPERATOR, "operator": "toggle_case", "operator_args": {}, "context": Context.VISUAL },
@@ -130,7 +132,7 @@ var the_key_map : Array[Dictionary] = [
     { "keys": ["Shift+Period"],                 "type": ACTION, "action": "indent", "action_args": {  "forward" = true } },
     { "keys": ["Shift+J"],                      "type": ACTION, "action": "join_lines", "action_args": {} },
     { "keys": ["M", "{char}"],                  "type": ACTION, "action": "set_bookmark", "action_args": {} },
-    { "keys": ["Apostrophe", "{char}"],         "type": MOTION, "motion": "go_to_bookmark", "motion_args": {} },
+    { "keys": ["Ctrl+BracketRight"],            "type": ACTION, "action": "go_to_definition", "action_args": {} },
 ]
 
 
@@ -144,7 +146,8 @@ var command_keys_white_list : Dictionary = {
     "Ctrl+D": 1,
     "Ctrl+O": 1,
     "Ctrl+I": 1,
-    "Ctrl+R": 1
+    "Ctrl+R": 1,
+    "Ctrl+BracketRight": 1,
 }
 
 
@@ -488,6 +491,12 @@ class Command:
 
         return null
 
+    static func go_to_bookmark(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
+        var name = args.selected_character
+        var line := vim.current.bookmark_manager.get_bookmark(name)
+        if line < 0:
+            return null
+        return Position.new(line, 0)
 
 ###  OPERATORS
 
@@ -496,12 +505,14 @@ class Command:
         var line_wise = args.get("line_wise", false)
         vim.register.set_text(text, line_wise)
 
+        ed.begin_complex_operation()
         ed.delete_selection()
         
         # For linewise delete, we want to delete one more line
         if line_wise:
             ed.select(ed.curr_line(), -1, ed.curr_line()+1, -1)
             ed.delete_selection()
+        ed.end_complex_operation()
 
         var line := ed.curr_line()
         var col := ed.curr_column()
@@ -547,18 +558,24 @@ class Command:
         var line := ed.curr_line()
         var col := ed.curr_column()
 
-        if line_wise:
-            if after:
-                text = "\n" + text
-                col = len(ed.line_text(line))
-            else:
-                text = text + "\n"
-                col = 0
+        ed.begin_complex_operation()
+        if vim.current.visual_mode:
+            ed.delete_selection()
         else:
-            col += 1 if after else 0
+            if line_wise:
+                if after:
+                    text = "\n" + text
+                    col = len(ed.line_text(line))
+                else:
+                    text = text + "\n"
+                    col = 0
+            else:
+                col += 1 if after else 0
         
-        ed.set_curr_column(col)
+            ed.set_curr_column(col)
+            
         ed.insert_text(text)
+        ed.end_complex_operation()
 
     static func undo(args: Dictionary, ed: EditorAdaptor, vim: Vim) -> void:
         for i in range(args.repeat):
@@ -687,14 +704,16 @@ class Command:
         var name = args.selected_character
         if name in LOWER_ALPHA:
             vim.current.bookmark_manager.set_bookmark(name, ed.curr_line())
-
-    static func go_to_bookmark(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
-        var name = args.selected_character
-        var line := vim.current.bookmark_manager.get_bookmark(name)
-        if line < 0:
-            return null
-        return Position.new(line, 0)
-
+        
+    static func go_to_definition(args: Dictionary, ed: EditorAdaptor, vim: Vim) -> void:
+        var pos_before := ed.curr_position()
+        
+        ed.go_to_definition()
+        
+        await ed.code_editor.get_tree().process_frame
+        var pos_after := ed.curr_position()
+        if not pos_before.equals(pos_after):
+            vim.current.jump_list.add(pos_before, pos_after)
 
     ###  HELPER FUNCTIONS
 
@@ -1215,7 +1234,6 @@ class EditorAdaptor:
         code_editor.set_caret_line(line)
         code_editor.set_caret_column(col)
 
-
     func first_line() -> int:
         return 0
 
@@ -1262,6 +1280,10 @@ class EditorAdaptor:
     func char_at(line: int, col: int) -> String:
         var s := line_text(line)
         return s[col] if col >= 0 and col < len(s) else ''
+        
+    func go_to_definition() -> void:
+        var symbol := code_editor.get_word_under_caret()
+        code_editor.symbol_lookup.emit(symbol, curr_line(), curr_column())
 
     func set_block_caret(block: bool) -> void:
         if block:
