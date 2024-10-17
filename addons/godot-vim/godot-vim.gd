@@ -62,6 +62,8 @@ var the_key_map : Array[Dictionary] = [
     { "keys": ["Shift+F", "{char}"],            "type": MOTION, "motion": "move_to_next_char", "motion_args": { "forward": false } },
     { "keys": ["T", "{char}"],                  "type": MOTION, "motion": "move_to_next_char", "motion_args": { "forward": true, "stop_before": true, "inclusive": true } },
     { "keys": ["Shift+T", "{char}"],            "type": MOTION, "motion": "move_to_next_char", "motion_args": { "forward": false, "stop_before": true } },
+    { "keys": ["Shift+BracketRight"],           "type": MOTION, "motion": "move_by_paragraph", "motion_args": { "forward": true } },
+    { "keys": ["Shift+BracketLeft"],            "type": MOTION, "motion": "move_by_paragraph", "motion_args": { "forward": false } },
     { "keys": ["Semicolon"],                    "type": MOTION, "motion": "repeat_last_char_search", "motion_args": {} },
     { "keys": ["Shift+8"],                      "type": MOTION, "motion": "find_word_under_caret", "motion_args": { "forward": true, "to_jump_list": true } },
     { "keys": ["Shift+3"],                      "type": MOTION, "motion": "find_word_under_caret", "motion_args": { "forward": false, "to_jump_list": true } },
@@ -424,6 +426,22 @@ class Command:
                     return old_pos if stop_before else Position.new(ch.line, ch.column)
             old_pos = Position.new(ch.line, ch.column)
         return null
+
+    static func move_by_paragraph(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
+        var search_dir: int = int(args.forward) - int(!args.forward)  # 1 if forward else -1
+        var line: int = cur.line + search_dir
+
+        for i in range(args.repeat):
+            while line >= 0 and line < ed.code_editor.get_line_count():
+                var current_empty: bool = ed.code_editor.get_line(line).strip_edges().is_empty()
+                var prev_empty: bool = ed.code_editor.get_line(line - search_dir).strip_edges().is_empty()
+
+                line += search_dir
+
+                if current_empty and !prev_empty:
+                    break
+
+        return Position.new(line - search_dir, 0)
 
     static func repeat_last_char_search(cur: Position, args: Dictionary, ed: EditorAdaptor, vim: Vim) -> Position:
         var last_char_search := vim.last_char_search
