@@ -148,6 +148,7 @@ var command_keys_white_list : Dictionary = {
     "Ctrl+I": 1,
     "Ctrl+R": 1,
     "Ctrl+BracketRight": 1,
+    "Ctrl+BracketLeft": 1,
 }
 
 
@@ -1473,7 +1474,7 @@ class CommandDispatcher:
 
         vim.macro_manager.push_key(key)
 
-        if key_code == "Escape":
+        if key_code == "Escape" or key_code == "Ctrl+BracketLeft":
             input_state.clear()
             vim.macro_manager.on_command_processed({}, vim.current.insert_mode)  # From insert mode to normal mode, this marks the end of an edit command
             vim.current.enter_normal_mode()
